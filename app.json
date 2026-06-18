@@ -25,6 +25,26 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a4a0699b-9c89-42db-a529-7291e7c324ee"
+      }
+    },
+    "owner": "yecko",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a4a0699b-9c89-42db-a529-7291e7c324ee"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Appen behöver kameran för att skanna dokument."
+        }
+      ]
+    ]
   }
 }
