@@ -1,6 +1,6 @@
 // types.ts
 // Definierar datastrukturerna för BRFApp
-// Tre huvudtyper: styrelsemedlem, projekt och dokument
+// Medlem, projekt, samt två separata dokumenttyper: arkiv och projektdokument
 
 // Möjliga roller i en BRF-styrelse
 export type MemberRole =
@@ -14,7 +14,7 @@ export type MemberRole =
 // Möjliga statusar för ett projekt
 export type ProjectStatus = 'Planerat' | 'Pågående' | 'Klart' | 'Pausat';
 
-// Möjliga dokumenttyper
+// Möjliga dokumenttyper — gemensamt för både arkiv och projektdokument
 export type DocumentType =
   | 'Kvitto'
   | 'Offert'
@@ -24,36 +24,53 @@ export type DocumentType =
   | 'Avtal'
   | 'Övrigt';
 
-// Definierar datastrukturen för en styrelsemedlem
+// Styrelsemedlem
 export type Member = {
   id: string;
-  name: string;               // Fullständigt namn
-  role: MemberRole;           // Roll i styrelsen
-  email: string;              // E-postadress
-  phone: string;              // Telefonnummer
-  createdAt: number;          // Tidsstämpel när medlemmen lades till
+  name: string;
+  role: MemberRole;
+  email: string;
+  phone: string;
+  createdAt: number;
 };
 
-// Definierar datastrukturen för ett projekt
+// Projekt
 export type Project = {
   id: string;
-  title: string;              // Projektets namn
-  description: string;        // Beskrivning av projektet
-  memberId: string;           // ID på ansvarig styrelsemedlem
-  status: ProjectStatus;      // Nuvarande status
-  deadline: number | null;    // Deadline som tidsstämpel, null om ingen deadline
-  budget: number | null;      // Budget i kronor, null om ingen budget
-  createdAt: number;          // Tidsstämpel när projektet skapades
+  title: string;
+  description: string;
+  memberId: string;
+  status: ProjectStatus;
+  deadline: number | null;
+  budget: number | null;
+  createdAt: number;
 };
 
-// Definierar datastrukturen för ett dokument kopplat till ett projekt
-export type Document = {
+// Arkivdokument — fristående handlingar som stadgar, lån, generella dokument
+// Sparas i Firestore-collection "archive_documents", ingen koppling till projekt
+export type ArchiveDocument = {
   id: string;
-  projectId: string;          // ID på projektet dokumentet tillhör
-  title: string;              // Dokumentets titel/beskrivning
-  type: DocumentType;         // Typ av dokument
-  date: number;               // Datum för dokumentet som tidsstämpel
-  amount: number | null;      // Belopp i kronor (för kvitton/fakturor), null annars
-  notes: string;              // Anteckningar om dokumentet
-  createdAt: number;          // Tidsstämpel när dokumentet lades till
+  title: string;
+  type: DocumentType;
+  date: number;
+  amount: number | null;
+  notes: string;
+  createdAt: number;
+  fileUri?: string;    // Lokal URI till bifogad fil (PDF/bild från Filer-appen)
+  fileName?: string;   // Filnamnet på den bifogade filen
+};
+
+// Projektdokument — handlingar kopplade till ett specifikt projekt
+// Sparas i Firestore-collection "project_documents", alltid med projectId
+export type ProjectDocument = {
+  id: string;
+  projectId: string;
+  title: string;
+  type: DocumentType;
+  date: number;
+  amount: number | null;
+  notes: string;
+  createdAt: number;
+  fileUri?: string;    // Lokal URI till bifogad fil (PDF/bild från Filer-appen)
+  fileName?: string;   // Filnamnet på den bifogade filen
 };

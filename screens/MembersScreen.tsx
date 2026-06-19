@@ -21,7 +21,6 @@ const MEMBER_ROLES = Constants.MEMBER_ROLES;
 import { Member, MemberRole } from '../types';
 
 export default function MembersScreen() {
-  // Destructurerar med fallback för att undvika undefined-fel
   const result = useMembers();
   const members = result?.members ?? [];
   const loading = result?.loading ?? true;
@@ -30,19 +29,14 @@ export default function MembersScreen() {
   const updateMember = result?.updateMember;
   const deleteMember = result?.deleteMember;
 
-  // Styr om formulärmodalen är synlig
   const [showModal, setShowModal] = useState(false);
-
-  // Håller den medlem som redigeras — null betyder att vi skapar en ny
   const [editingMember, setEditingMember] = useState<Member | null>(null);
 
-  // Formulärfält
   const [name, setName] = useState('');
   const [role, setRole] = useState<MemberRole>('Ledamot');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
 
-  // Öppnar modalen för att skapa ny medlem
   const handleAdd = () => {
     setEditingMember(null);
     setName('');
@@ -52,7 +46,6 @@ export default function MembersScreen() {
     setShowModal(true);
   };
 
-  // Öppnar modalen för att redigera befintlig medlem
   const handleEdit = (member: Member) => {
     setEditingMember(member);
     setName(member.name);
@@ -62,13 +55,11 @@ export default function MembersScreen() {
     setShowModal(true);
   };
 
-  // Sparar ny eller uppdaterad medlem till Firebase
   const handleSave = async () => {
     if (!name.trim()) {
       Alert.alert('Namn krävs');
       return;
     }
-
     try {
       const data = {
         name: name.trim(),
@@ -77,20 +68,17 @@ export default function MembersScreen() {
         phone: phone.trim(),
         createdAt: editingMember?.createdAt ?? Date.now(),
       };
-
       if (editingMember) {
         await updateMember?.(editingMember.id, data);
       } else {
         await addMember?.(data);
       }
-
       setShowModal(false);
     } catch (e) {
       Alert.alert('Fel', 'Kunde inte spara medlemmen.');
     }
   };
 
-  // Visar bekräftelsedialog och raderar medlemmen vid bekräftelse
   const handleDelete = (member: Member) => {
     Alert.alert(
       'Ta bort?',
@@ -112,7 +100,6 @@ export default function MembersScreen() {
     );
   };
 
-  // Laddningsskärm medan Firebase hämtar data
   if (loading) {
     return (
       <View style={styles.center}>
@@ -124,7 +111,6 @@ export default function MembersScreen() {
   return (
     <SafeAreaView style={styles.container}>
 
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Styrelsen</Text>
         <TouchableOpacity style={styles.addBtn} onPress={handleAdd}>
@@ -132,14 +118,12 @@ export default function MembersScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Felmeddelande om Firebase är nere */}
       {error && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
 
-      {/* Lista med styrelsemedlemmar */}
       <ScrollView style={styles.list}>
         {members.length === 0 ? (
           <Text style={styles.empty}>Inga medlemmar tillagda än</Text>
@@ -151,7 +135,6 @@ export default function MembersScreen() {
               onPress={() => handleEdit(member)}
               onLongPress={() => handleDelete(member)}
             >
-              {/* Avatar med första bokstaven i namnet */}
               <View style={styles.cardLeft}>
                 <View style={styles.avatar}>
                   <Text style={styles.avatarText}>
@@ -160,7 +143,6 @@ export default function MembersScreen() {
                 </View>
               </View>
 
-              {/* Medlemsinfo */}
               <View style={styles.cardContent}>
                 <Text style={styles.memberName}>{member.name}</Text>
                 <Text style={styles.memberRole}>{member.role}</Text>
@@ -172,7 +154,6 @@ export default function MembersScreen() {
                 ) : null}
               </View>
 
-              {/* Redigera-indikator */}
               <Text style={styles.chevron}>›</Text>
             </TouchableOpacity>
           ))
@@ -187,7 +168,6 @@ export default function MembersScreen() {
               {editingMember ? 'Redigera medlem' : 'Ny styrelsemedlem'}
             </Text>
 
-            {/* Namnfält */}
             <Text style={styles.label}>Namn</Text>
             <TextInput
               style={styles.input}
@@ -196,23 +176,16 @@ export default function MembersScreen() {
               onChangeText={setName}
             />
 
-            {/* Rollväljare */}
             <Text style={styles.label}>Roll</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.roleRow}>
                 {MEMBER_ROLES.map((r) => (
                   <TouchableOpacity
                     key={r}
-                    style={[
-                      styles.roleChip,
-                      role === r && styles.roleChipActive,
-                    ]}
+                    style={[styles.roleChip, role === r && styles.roleChipActive]}
                     onPress={() => setRole(r as MemberRole)}
                   >
-                    <Text style={[
-                      styles.roleChipText,
-                      role === r && styles.roleChipTextActive,
-                    ]}>
+                    <Text style={[styles.roleChipText, role === r && styles.roleChipTextActive]}>
                       {r}
                     </Text>
                   </TouchableOpacity>
@@ -220,7 +193,6 @@ export default function MembersScreen() {
               </View>
             </ScrollView>
 
-            {/* E-postfält */}
             <Text style={styles.label}>E-post</Text>
             <TextInput
               style={styles.input}
@@ -231,7 +203,6 @@ export default function MembersScreen() {
               autoCapitalize="none"
             />
 
-            {/* Telefonfält */}
             <Text style={styles.label}>Telefon</Text>
             <TextInput
               style={styles.input}
@@ -241,14 +212,12 @@ export default function MembersScreen() {
               keyboardType="phone-pad"
             />
 
-            {/* Spara-knapp */}
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
               <Text style={styles.saveBtnText}>
                 {editingMember ? 'Spara ändringar' : 'Lägg till'}
               </Text>
             </TouchableOpacity>
 
-            {/* Avbryt-knapp */}
             <TouchableOpacity onPress={() => setShowModal(false)}>
               <Text style={styles.cancelText}>Avbryt</Text>
             </TouchableOpacity>
@@ -256,22 +225,14 @@ export default function MembersScreen() {
           </View>
         </View>
       </Modal>
-      {/* ─── Slut modal ─── */}
 
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -282,163 +243,44 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1a1a1a',
-  },
-  addBtn: {
-    backgroundColor: '#1976D2',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  addBtnText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  errorBanner: {
-    backgroundColor: '#fff3cd',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  errorText: {
-    color: '#856404',
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  list: {
-    flex: 1,
-    paddingTop: 8,
-  },
-  empty: {
-    textAlign: 'center',
-    marginTop: 40,
-    color: '#aaa',
-    fontSize: 15,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 12,
-    padding: 14,
-    elevation: 1,
-  },
-  cardLeft: {
-    marginRight: 12,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#1976D2',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  cardContent: {
-    flex: 1,
-  },
-  memberName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 2,
-  },
-  memberRole: {
-    fontSize: 13,
-    color: '#1976D2',
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  memberContact: {
-    fontSize: 12,
-    color: '#888',
-  },
-  chevron: {
-    fontSize: 24,
-    color: '#ccc',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
+  title: { fontSize: 24, fontWeight: '700', color: '#1a1a1a' },
+  addBtn: { backgroundColor: '#1976D2', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16 },
+  addBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  errorBanner: { backgroundColor: '#fff3cd', paddingHorizontal: 16, paddingVertical: 8 },
+  errorText: { color: '#856404', fontSize: 13, textAlign: 'center' },
+  list: { flex: 1, paddingTop: 8 },
+  empty: { textAlign: 'center', marginTop: 40, color: '#aaa', fontSize: 15 },
+  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 8, borderRadius: 12, padding: 14, elevation: 1 },
+  cardLeft: { marginRight: 12 },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1976D2', justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  cardContent: { flex: 1 },
+  memberName: { fontSize: 16, fontWeight: '600', color: '#1a1a1a', marginBottom: 2 },
+  memberRole: { fontSize: 13, color: '#1976D2', fontWeight: '500', marginBottom: 2 },
+  memberContact: { fontSize: 12, color: '#888' },
+  chevron: { fontSize: 24, color: '#ccc' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+
+  // Fix: paddingTop och maxHeight förhindrar krock med statusbaren (klocka/batteri)
   modal: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 24,
+    paddingTop: 50,
     gap: 8,
+    maxHeight: '85%',
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 8,
-    color: '#1a1a1a',
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#555',
-    marginTop: 4,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 15,
-    backgroundColor: '#fff',
-  },
-  roleRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingVertical: 4,
-  },
-  roleChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#ddd',
-    backgroundColor: '#fff',
-  },
-  roleChipActive: {
-    backgroundColor: '#1976D2',
-    borderColor: '#1976D2',
-  },
-  roleChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#555',
-  },
-  roleChipTextActive: {
-    color: '#fff',
-  },
-  saveBtn: {
-    backgroundColor: '#1976D2',
-    padding: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  saveBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  cancelText: {
-    textAlign: 'center',
-    color: '#888',
-    padding: 8,
-  },
+
+  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8, color: '#1a1a1a' },
+  label: { fontSize: 13, fontWeight: '600', color: '#555', marginTop: 4 },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 15, backgroundColor: '#fff' },
+  roleRow: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
+  roleChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#ddd', backgroundColor: '#fff' },
+  roleChipActive: { backgroundColor: '#1976D2', borderColor: '#1976D2' },
+  roleChipText: { fontSize: 13, fontWeight: '600', color: '#555' },
+  roleChipTextActive: { color: '#fff' },
+  saveBtn: { backgroundColor: '#1976D2', padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 8 },
+  saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  cancelText: { textAlign: 'center', color: '#888', padding: 8 },
 });

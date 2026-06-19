@@ -1,7 +1,6 @@
 // screens/DocumentsScreen.tsx
-// Skärm för att visa och hantera dokument kopplade till ett projekt
-// Visar alla dokument med typ, datum, belopp och anteckningar
-// Tryck på ett dokument för att redigera, långtryck för att radera
+// Skärm för fristående arkivdokument — stadgar, lån, generella handlingar
+// Helt separerad från projekt, ingen projektväljare
 // Kamera + OCR: ta foto på ett dokument och extrahera text via OCR.space API
 
 import { useState } from 'react';
@@ -18,63 +17,108 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import useDocuments from '../hooks/useDocuments';
-import useProjects from '../hooks/useProjects';
+import * as DocumentPicker from 'expo-document-picker';
+import * as Sharing from 'expo-sharing';
+import useArchiveDocuments from '../hooks/useArchiveDocuments';
 import Constants from '../constants';
 const DOCUMENT_COLORS = Constants.DOCUMENT_COLORS;
 const DOCUMENT_TYPES = Constants.DOCUMENT_TYPES;
-import { Document, DocumentType } from '../types';
+import { ArchiveDocument, DocumentType } from '../types';
 
-// OCR.space API-nyckel — gratis tier, 25 000 anrop per månad
 const OCR_API_KEY = 'K89147065988957';
 const OCR_API_URL = 'https://api.ocr.space/parse/image';
 
-export default function DocumentsScreen() {
-  const { projects = [] } = useProjects();
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+const DocumentsScreen = () => {
   const { documents = [], loading, error, addDocument, updateDocument, deleteDocument } =
-    useDocuments(selectedProjectId);
+    useArchiveDocuments();
 
   const [showModal, setShowModal] = useState(false);
-  const [editingDocument, setEditingDocument] = useState<Document | null>(null);
+  const [editingDocument, setEditingDocument] = useState<ArchiveDocument | null>(null);
 
-  // Formulärfält
   const [title, setTitle] = useState('');
-  const [type, setType] = useState<DocumentType>('Kvitto');
+  const [type, setType] = useState<DocumentType>('Avtal');
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
 
-  // OCR-status — visar laddningsindikator under scanning
+  // Bifogad fil — lokal URI och filnamn
+  const [fileUri, setFileUri] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+
   const [scanning, setScanning] = useState(false);
 
-  // Öppnar modalen för att skapa nytt dokument
   const handleAdd = () => {
-    if (!selectedProjectId) {
-      Alert.alert('Välj ett projekt först');
-      return;
-    }
     setEditingDocument(null);
     setTitle('');
-    setType('Kvitto');
+    setType('Avtal');
     setDate(new Date().toLocaleDateString('sv-SE'));
     setAmount('');
     setNotes('');
+    setFileUri(null);
+    setFileName(null);
     setShowModal(true);
   };
 
-  // Öppnar modalen för att redigera befintligt dokument
-  const handleEdit = (document: Document) => {
+  const handleEdit = (document: ArchiveDocument) => {
     setEditingDocument(document);
     setTitle(document.title);
     setType(document.type);
     setDate(new Date(document.date).toLocaleDateString('sv-SE'));
     setAmount(document.amount ? String(document.amount) : '');
     setNotes(document.notes);
+    setFileUri(document.fileUri ?? null);
+    setFileName(document.fileName ?? null);
     setShowModal(true);
   };
 
-  // ─── OCR: försöker extrahera belopp från text ─────────────────────────────
+  // Öppnar Filer-appen för att välja PDF, bild eller annat dokument
+  // Filen sparas lokalt och bara URI:n + filnamnet sparas i Firestore
+  const handlePickFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets[0]) return;
+
+      const asset = result.assets[0];
+      setFileUri(asset.uri);
+      setFileName(asset.name);
+
+      // Föreslå titel baserat på filnamnet om titeln är tom
+      if (!title) {
+        setTitle(asset.name.replace(/\.[^/.]+$/, ''));
+      }
+    } catch (e) {
+      console.error('Fel vid filval:', e);
+      Alert.alert('Fel', 'Kunde inte välja filen.');
+    }
+  };
+
+  // Tar bort den bifogade filen från formuläret
+  const handleRemoveFile = () => {
+    setFileUri(null);
+    setFileName(null);
+  };
+
+  // Öppnar en bifogad fil via systemets delningsmeny
+  // Detta visar filen i Förhandsgranska, Mail, eller annan app som kan öppna filtypen
+  const handleOpenFile = async (uri: string) => {
+    try {
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        Alert.alert('Fel', 'Kan inte öppna filer på denna enhet.');
+        return;
+      }
+      await Sharing.shareAsync(uri);
+    } catch (e) {
+      console.error('Fel vid öppning av fil:', e);
+      Alert.alert('Fel', 'Kunde inte öppna filen. Den kan ha tagits bort från enheten.');
+    }
+  };
+
+  // ─── OCR ───────────────────────────────────────────────────────────────────
 
   const extractAmount = (text: string): string => {
     const patterns = [
@@ -87,19 +131,15 @@ export default function DocumentsScreen() {
     ];
     for (const pattern of patterns) {
       const match = text.match(pattern);
-      if (match) {
-        return match[1].replace(/\s/g, '').replace(',', '.');
-      }
+      if (match) return match[1].replace(/\s/g, '').replace(',', '.');
     }
     return '';
   };
 
-  // Försöker extrahera datum från text
   const extractDate = (text: string): string => {
     const patterns = [
       /(\d{4}-\d{2}-\d{2})/,
       /(\d{2}\/\d{2}\/\d{4})/,
-      /(\d{4})\s*[-/]\s*(\d{1,2})\s*[-/]\s*(\d{1,2})/,
     ];
     for (const pattern of patterns) {
       const match = text.match(pattern);
@@ -108,18 +148,14 @@ export default function DocumentsScreen() {
     return new Date().toLocaleDateString('sv-SE');
   };
 
-  // ─── OCR: ta foto och skicka till OCR.space ───────────────────────────────
-
   const handleScan = async () => {
     try {
-      // Be om kamerabehörighet
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
         Alert.alert('Behörighet saknas', 'Appen behöver tillgång till kameran.');
         return;
       }
 
-      // Öppna kameran — base64 krävs för att skicka till OCR.space
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.7,
@@ -136,51 +172,39 @@ export default function DocumentsScreen() {
 
       setScanning(true);
 
-      // Skicka bilden till OCR.space API som base64
       const formData = new FormData();
       formData.append('base64Image', `data:image/jpeg;base64,${base64Image}`);
-      formData.append('language', 'swe');        // Svenska
+      formData.append('language', 'swe,eng');
       formData.append('isOverlayRequired', 'false');
       formData.append('detectOrientation', 'true');
       formData.append('scale', 'true');
-      formData.append('OCREngine', '2');          // Engine 2 är bättre på tryckt text
+      formData.append('OCREngine', '2');
 
       const response = await fetch(OCR_API_URL, {
         method: 'POST',
-        headers: {
-          'apikey': OCR_API_KEY,
-        },
+        headers: { 'apikey': OCR_API_KEY },
         body: formData,
       });
 
       const data = await response.json();
 
-      // Kontrollera att vi fick text tillbaka
       if (data.IsErroredOnProcessing || !data.ParsedResults?.[0]?.ParsedText) {
         setScanning(false);
-        Alert.alert('Scanning misslyckades', 'Kunde inte läsa text från bilden. Försök med bättre belysning.');
+        Alert.alert('Scanning misslyckades', `Fel: ${data.ErrorMessage?.[0] ?? 'Okänt fel'}. Försök med bättre belysning.`);
         return;
       }
 
       const text = data.ParsedResults[0].ParsedText;
-
-      // Extrahera information från texten
       const foundAmount = extractAmount(text);
       const foundDate = extractDate(text);
 
-      // Fyll i formulärfälten med extraherad data
       if (foundAmount) setAmount(foundAmount);
       if (foundDate) setDate(foundDate);
 
-      // Första raden som titel om titeln är tom
       const firstLine = text.split('\n').find((l: string) => l.trim().length > 3)?.trim() ?? '';
-      if (firstLine && !title) {
-        setTitle(firstLine.substring(0, 50));
-      }
+      if (firstLine && !title) setTitle(firstLine.substring(0, 50));
 
-      // Hela texten i anteckningsfältet som referens
       setNotes(text.trim().substring(0, 500));
-
       setScanning(false);
       Alert.alert(
         'Scanning klar! ✓',
@@ -205,19 +229,16 @@ export default function DocumentsScreen() {
       Alert.alert('Titel krävs');
       return;
     }
-    if (!selectedProjectId) {
-      Alert.alert('Inget projekt valt');
-      return;
-    }
     try {
       const data = {
-        projectId: selectedProjectId,
         title: title.trim(),
         type,
         date: parseDate(date),
         amount: amount ? Number(amount) : null,
         notes: notes.trim(),
         createdAt: editingDocument?.createdAt ?? Date.now(),
+        fileUri: fileUri ?? undefined,
+        fileName: fileName ?? undefined,
       };
       if (editingDocument) {
         await updateDocument(editingDocument.id, data);
@@ -230,7 +251,7 @@ export default function DocumentsScreen() {
     }
   };
 
-  const handleDelete = (document: Document) => {
+  const handleDelete = (document: ArchiveDocument) => {
     Alert.alert(
       'Ta bort?',
       `Vill du ta bort "${document.title}"?`,
@@ -258,7 +279,7 @@ export default function DocumentsScreen() {
       year: 'numeric',
     });
 
-  if (loading && selectedProjectId) {
+  if (loading) {
     return (
       <View style={styles.center}>
         <Text>Laddar...</Text>
@@ -269,13 +290,14 @@ export default function DocumentsScreen() {
   return (
     <SafeAreaView style={styles.container}>
 
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Dokument</Text>
+        <Text style={styles.title}>Dokumentarkiv</Text>
         <TouchableOpacity style={styles.addBtn} onPress={handleAdd}>
           <Text style={styles.addBtnText}>+ Lägg till</Text>
         </TouchableOpacity>
       </View>
+
+      <Text style={styles.subtitle}>Stadgar, lån och andra fristående handlingar</Text>
 
       {error && (
         <View style={styles.errorBanner}>
@@ -283,38 +305,9 @@ export default function DocumentsScreen() {
         </View>
       )}
 
-      {/* Projektväljare */}
-      <View style={styles.projectSelector}>
-        <Text style={styles.selectorLabel}>Välj projekt:</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.projectChipRow}>
-            {projects.map((p) => (
-              <TouchableOpacity
-                key={p.id}
-                style={[
-                  styles.projectChip,
-                  selectedProjectId === p.id && styles.projectChipActive,
-                ]}
-                onPress={() => setSelectedProjectId(p.id)}
-              >
-                <Text style={[
-                  styles.projectChipText,
-                  selectedProjectId === p.id && styles.projectChipTextActive,
-                ]}>
-                  {p.title}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-      </View>
-
-      {/* Dokumentlista */}
       <ScrollView style={styles.list}>
-        {!selectedProjectId ? (
-          <Text style={styles.empty}>Välj ett projekt för att se dokument</Text>
-        ) : documents.length === 0 ? (
-          <Text style={styles.empty}>Inga dokument för detta projekt</Text>
+        {documents.length === 0 ? (
+          <Text style={styles.empty}>Inga dokument i arkivet än</Text>
         ) : (
           documents.map((document) => (
             <TouchableOpacity
@@ -335,6 +328,14 @@ export default function DocumentsScreen() {
                 {document.amount ? (
                   <Text style={styles.docAmount}>{document.amount.toLocaleString('sv-SE')} kr</Text>
                 ) : null}
+                {document.fileName ? (
+                  <TouchableOpacity onPress={(e) => {
+                    e.stopPropagation();
+                    if (document.fileUri) handleOpenFile(document.fileUri);
+                  }}>
+                    <Text style={styles.docFile} numberOfLines={1}>📎 {document.fileName} — Öppna</Text>
+                  </TouchableOpacity>
+                ) : null}
                 {document.notes ? (
                   <Text style={styles.docNotes} numberOfLines={2}>{document.notes}</Text>
                 ) : null}
@@ -344,31 +345,60 @@ export default function DocumentsScreen() {
         )}
       </ScrollView>
 
-      {/* ─── Modal för att skapa/redigera dokument ─── */}
       <Modal visible={showModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <ScrollView>
-            <View style={styles.modal}>
+        {/* Overlay är klickbar — trycker man utanför modalen stängs den */}
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowModal(false)}
+        >
+          {/* Modalens innehåll fångar klick så de inte stänger modalen av misstag */}
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <ScrollView>
+              <View style={styles.modal}>
 
-              {/* Header med titel och skanna-knapp */}
-              <View style={styles.modalHeaderRow}>
-                <Text style={styles.modalTitle}>
-                  {editingDocument ? 'Redigera dokument' : 'Nytt dokument'}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.scanBtn, scanning && styles.scanBtnDisabled]}
-                  onPress={handleScan}
-                  disabled={scanning}
-                >
-                  {scanning ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={styles.scanBtnText}>📷 Skanna</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+                <View style={styles.modalHeaderRow}>
+                  <Text style={styles.modalTitle}>
+                    {editingDocument ? 'Redigera dokument' : 'Nytt arkivdokument'}
+                  </Text>
+                  <View style={styles.headerBtnRow}>
+                    <TouchableOpacity
+                      style={styles.fileBtn}
+                      onPress={handlePickFile}
+                    >
+                      <Text style={styles.fileBtnText}>📁 Filer</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.scanBtn, scanning && styles.scanBtnDisabled]}
+                      onPress={handleScan}
+                      disabled={scanning}
+                    >
+                      {scanning ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.scanBtnText}>📷 Skanna</Text>
+                      )}
+                    </TouchableOpacity>
+                    {/* X-knapp för att stänga modalen utan att spara */}
+                    <TouchableOpacity
+                      style={styles.closeBtn}
+                      onPress={() => setShowModal(false)}
+                    >
+                      <Text style={styles.closeBtnText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
 
-              {/* Scanning-banner */}
+              {/* Visar bifogad fil om en har valts */}
+              {fileName && (
+                <View style={styles.fileChip}>
+                  <Text style={styles.fileChipText} numberOfLines={1}>📎 {fileName}</Text>
+                  <TouchableOpacity onPress={handleRemoveFile}>
+                    <Text style={styles.fileChipRemove}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {scanning && (
                 <View style={styles.scanningBanner}>
                   <ActivityIndicator size="small" color="#1976D2" />
@@ -379,28 +409,26 @@ export default function DocumentsScreen() {
               <Text style={styles.label}>Titel</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Dokumentets titel"
+                placeholder="T.ex. Stadgar 2026"
                 value={title}
                 onChangeText={setTitle}
               />
 
               <Text style={styles.label}>Typ</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.chipRow}>
-                  {DOCUMENT_TYPES.map((t) => (
-                    <TouchableOpacity
-                      key={t}
-                      style={[
-                        styles.chip,
-                        type === t && { backgroundColor: DOCUMENT_COLORS[t], borderColor: DOCUMENT_COLORS[t] },
-                      ]}
-                      onPress={() => setType(t as DocumentType)}
-                    >
-                      <Text style={[styles.chipText, type === t && styles.chipTextActive]}>{t}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
+              <View style={styles.chipRowWrap}>
+                {DOCUMENT_TYPES.map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[
+                      styles.chip,
+                      type === t && { backgroundColor: DOCUMENT_COLORS[t], borderColor: DOCUMENT_COLORS[t] },
+                    ]}
+                    onPress={() => setType(t as DocumentType)}
+                  >
+                    <Text style={[styles.chipText, type === t && styles.chipTextActive]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               <Text style={styles.label}>Datum</Text>
               <TextInput
@@ -439,14 +467,15 @@ export default function DocumentsScreen() {
                 <Text style={styles.cancelText}>Avbryt</Text>
               </TouchableOpacity>
 
-            </View>
-          </ScrollView>
-        </View>
+              </View>
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
     </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
@@ -456,29 +485,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: 16,
+    backgroundColor: '#fff',
+  },
+  title: { fontSize: 24, fontWeight: '700', color: '#1a1a1a' },
+  subtitle: {
+    fontSize: 13,
+    color: '#888',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  title: { fontSize: 24, fontWeight: '700', color: '#1a1a1a' },
   addBtn: { backgroundColor: '#1976D2', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16 },
   addBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   errorBanner: { backgroundColor: '#fff3cd', paddingHorizontal: 16, paddingVertical: 8 },
   errorText: { color: '#856404', fontSize: 13, textAlign: 'center' },
-  projectSelector: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  selectorLabel: { fontSize: 12, fontWeight: '600', color: '#888', marginBottom: 8 },
-  projectChipRow: { flexDirection: 'row', gap: 8 },
-  projectChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: '#ddd', backgroundColor: '#fff' },
-  projectChipActive: { backgroundColor: '#1976D2', borderColor: '#1976D2' },
-  projectChipText: { fontSize: 13, fontWeight: '600', color: '#555' },
-  projectChipTextActive: { color: '#fff' },
   list: { flex: 1, paddingTop: 8 },
   empty: { textAlign: 'center', marginTop: 40, color: '#aaa', fontSize: 15 },
   card: { flexDirection: 'row', backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 8, borderRadius: 12, overflow: 'hidden', elevation: 1 },
@@ -492,32 +515,53 @@ const styles = StyleSheet.create({
   docAmount: { fontSize: 14, fontWeight: '700', color: '#1976D2', marginBottom: 4 },
   docNotes: { fontSize: 12, color: '#666' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modal: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 8 },
+  modal: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingTop: 50, gap: 8, maxHeight: '85%' },
   modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   modalTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
-  scanBtn: {
-    backgroundColor: '#2E7D32',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-    minWidth: 100,
+  headerBtnRow: { flexDirection: 'row', gap: 6 },
+  scanBtn: { backgroundColor: '#2E7D32', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, minWidth: 90, alignItems: 'center' },
+  scanBtnDisabled: { backgroundColor: '#888' },
+  scanBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+
+  // Filer-knapp
+  fileBtn: { backgroundColor: '#6A4C93', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, minWidth: 80, alignItems: 'center' },
+  fileBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+
+  // Stäng-knapp (X) i modalens header
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  scanBtnDisabled: { backgroundColor: '#888' },
-  scanBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  scanningBanner: {
+  closeBtnText: { color: '#666', fontSize: 16, fontWeight: '700' },
+
+  // Visar vald fil i formuläret
+  fileChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E3F2FD',
-    padding: 10,
+    justifyContent: 'space-between',
+    backgroundColor: '#F3E5F5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 8,
     marginBottom: 4,
   },
+  fileChipText: { color: '#6A4C93', fontSize: 13, flex: 1, marginRight: 8 },
+  fileChipRemove: { color: '#6A4C93', fontWeight: '700', fontSize: 16 },
+
+  // Filindikator på dokumentkortet
+  docFile: { fontSize: 12, color: '#6A4C93', marginBottom: 4 },
+
+  scanningBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E3F2FD', padding: 10, borderRadius: 8, marginBottom: 4 },
   scanningText: { color: '#1976D2', fontSize: 13 },
   label: { fontSize: 13, fontWeight: '600', color: '#555', marginTop: 4 },
   input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 15, backgroundColor: '#fff' },
   textArea: { height: 100, textAlignVertical: 'top' },
   chipRow: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
+  chipRowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 4 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#ddd', backgroundColor: '#fff' },
   chipText: { fontSize: 13, fontWeight: '600', color: '#555' },
   chipTextActive: { color: '#fff' },
@@ -525,3 +569,5 @@ const styles = StyleSheet.create({
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   cancelText: { textAlign: 'center', color: '#888', padding: 8 },
 });
+
+export default DocumentsScreen;

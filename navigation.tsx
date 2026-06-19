@@ -1,6 +1,7 @@
 // navigation.tsx
 // Hanterar all navigering i BRFApp
-// Bottom tab navigation med fyra flikar: Medlemmar, Projekt, Dokument, To-do
+// Bottom tab navigation med fyra flikar: Medlemmar, Projekt, Dokument (arkiv), To-do
+// ProjectsStack innehåller även ProjectDetailScreen för projektets egna dokument
 
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -8,13 +9,18 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { Text } from 'react-native';
 import MembersScreen from './screens/MembersScreen';
 import ProjectsScreen from './screens/ProjectsScreen';
+import ProjectDetailScreen from './screens/ProjectDetailScreen';
 import DocumentsScreen from './screens/DocumentsScreen';
 import TodoScreen from './screens/TodoScreen';
+import { Project } from './types';
 
+// Definierar parametrar för stack-navigeringen
+// ProjectDetail tar emot hela projekt-objektet för att undvika extra Firebase-läsning
 export type RootStackParamList = {
   MembersList: undefined;
-  ProjectsList: { memberId: string; memberName: string } | undefined;
-  DocumentsList: { projectId: string; projectTitle: string } | undefined;
+  ProjectsList: undefined;
+  ProjectDetail: { project: Project };
+  DocumentsList: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -28,10 +34,12 @@ function MembersStack() {
   );
 }
 
+// Projects-stack innehåller både listan och detaljvyn med projektdokument
 function ProjectsStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="ProjectsList" component={ProjectsScreen} />
+      <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
     </Stack.Navigator>
   );
 }
@@ -80,7 +88,6 @@ export default function Navigation() {
           component={DocumentsStack}
           options={{ tabBarIcon: () => <Text style={{ fontSize: 22 }}>📄</Text> }}
         />
-        {/* Flik 4 — Personlig to-do lista */}
         <Tab.Screen
           name="To-do"
           component={TodoScreen}
